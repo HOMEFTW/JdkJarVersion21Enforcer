@@ -10,6 +10,9 @@ import cpw.mods.fml.common.event.FMLServerStartingEvent;
 public class CommonProxy {
 
     public void preInit(FMLPreInitializationEvent event) {
+        if (!JarVersionPropertyEnforcer.shouldActivate()) {
+            return;
+        }
         JarVersionPropertyEnforcer.enforce();
         JdkJarVersion21Enforcer.LOG
             .info(JdkJarVersion21Enforcer.MOD_NAME + " at version " + JdkJarVersion21Enforcer.VERSION);
@@ -28,6 +31,9 @@ public class CommonProxy {
     }
 
     public void serverStarting(FMLServerStartingEvent event) {
+        if (!JarVersionPropertyEnforcer.shouldActivate()) {
+            return;
+        }
         JdkJarVersion21Enforcer.LOG.info(JdkJarVersion21Enforcer.MOD_NAME + " loaded.");
     }
 

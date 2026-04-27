@@ -8,6 +8,21 @@ public final class JarVersionPropertyEnforcer {
     private JarVersionPropertyEnforcer() {}
 
     public static void enforce() {
+        enforceIfRuntimeAbove21(currentJavaSpecificationVersion());
+    }
+
+    public static boolean shouldActivate() {
+        return JavaRuntimeVersion.isAbove21(currentJavaSpecificationVersion());
+    }
+
+    static void enforceIfRuntimeAbove21(String javaSpecificationVersion) {
+        if (!JavaRuntimeVersion.isAbove21(javaSpecificationVersion)) {
+            return;
+        }
         System.setProperty(PROPERTY_NAME, REQUIRED_VERSION);
+    }
+
+    private static String currentJavaSpecificationVersion() {
+        return System.getProperty("java.specification.version");
     }
 }

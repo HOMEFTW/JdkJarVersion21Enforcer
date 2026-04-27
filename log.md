@@ -1,5 +1,21 @@
 # 开发日志
 
+## 2026-04-27: 添加 Java 版本门控
+
+### 已完成
+- 添加 `JavaRuntimeVersion`，解析 `1.8`、`17`、`21`、`22`、`23`、`25`、`26` 等 `java.specification.version` 格式。
+- 将 `JarVersionPropertyEnforcer.enforce()` 改为仅在 Java 版本高于 21 时写入 `jdk.util.jar.version=21`。
+- 调整 `CommonProxy`，在 Java 21 及以下直接 no-op，避免普通 Forge 生命周期继续输出加载日志。
+- 添加测试覆盖 Java `8/17/21` 不启用，以及 Java `22/23/25/26` 启用。
+
+### 遇到的问题
+- **Forge 仍会扫描 jar**：同一个 CoreMod jar 无法在 JVM 启动后阻止 Forge 发现自身，因此实现为 Java 21 及以下 no-op，Java 22 及以上才执行属性强制。
+
+### 决策
+- 使用 `java.specification.version` 判断运行时主版本：这是 JVM 标准属性，适合在 CoreMod 早期读取。
+
+---
+
 ## 2026-04-27: 创建 JDK Jar Version 21 Enforcer
 
 ### 已完成
