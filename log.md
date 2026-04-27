@@ -1,10 +1,25 @@
 # 开发日志
 
+## 2026-04-27: 准备 v0.1.0 GitHub 发布
+
+### 已完成
+- 将 `modVersion` 从 `0.1.0-dev` 改为 `0.1.0`。
+- 添加 `README.md`，说明模组诞生原因、行为、安装方式和构建方式。
+- 将 `QQ_1777283414511.png` 复制到 `docs/assets/` 并在 README 中引用。
+
+### 遇到的问题
+- 无。
+
+### 决策
+- README 使用用户提供的图片作为“诞生原因”说明，并保留中文说明以贴近项目使用场景。
+
+---
+
 ## 2026-04-27: 打包发布 jar
 
 ### 已完成
 - 按请求运行完整 `gradlew.bat build` 打包模组 jar。
-- 产物路径为 `build/libs/jdkjarversion21enforcer-0.1.0-dev.jar`。
+- 产物路径为 `build/libs/jdkjarversion21enforcer-0.1.0.jar`。
 
 ### 遇到的问题
 - 无。

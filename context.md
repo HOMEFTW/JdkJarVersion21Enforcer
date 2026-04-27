@@ -4,6 +4,7 @@
 - Mod Name: JDK Jar Version 21 Enforcer
 - Mod ID: jdkjarversion21enforcer
 - Package: `com.andgatech.jdkjarversion21enforcer`
+- Version: `0.1.0`
 - Target: MC 1.7.10 + GTNH 2.8.4
 
 ## 已实现内容
@@ -56,5 +57,6 @@
 - `JarVersionPropertyEnforcer` 读取 `java.specification.version`：Java `22/23/25/26` 等高于 21 的版本会写入 `jdk.util.jar.version=21`，Java `21` 及以下保持 no-op。
 - Java 高于 21 时，`CommonProxy.preInit` 会输出类似 `Java 22 detected; forced jdk.util.jar.version=21.` 的日志。
 - `build.gradle` 的开发运行参数也包含 `-Djdk.util.jar.version=21`，方便本地 `runClient` / `runServer` 与实际目标保持一致。
-- 构建产物 `jdkjarversion21enforcer-0.1.0-dev.jar` 的 manifest 包含 `FMLCorePlugin` 和 `FMLCorePluginContainsFMLMod: true`。
-- 最新发布 jar 由 `gradlew.bat build` 生成，路径为 `build/libs/jdkjarversion21enforcer-0.1.0-dev.jar`。
+- 构建产物 `jdkjarversion21enforcer-0.1.0.jar` 的 manifest 包含 `FMLCorePlugin` 和 `FMLCorePluginContainsFMLMod: true`。
+- 最新发布 jar 由 `gradlew.bat clean build` 生成，路径为 `build/libs/jdkjarversion21enforcer-0.1.0.jar`。
+- `README.md` 引用 `docs/assets/QQ_1777283414511.png` 解释模组诞生原因。
