@@ -51,6 +51,19 @@ class CorePluginAndProxyEnforcementTest {
     }
 
     @Test
+    void activationLogMessageIsEmptyForJava21OrLower() {
+        assertNull(CommonProxy.activationLogMessage("21"));
+    }
+
+    @Test
+    void activationLogMessageIncludesJavaVersionAndForcedPropertyForJava22AndHigher() {
+        assertEquals("Java 22 detected; forced jdk.util.jar.version=21.", CommonProxy.activationLogMessage("22"));
+        assertEquals("Java 23 detected; forced jdk.util.jar.version=21.", CommonProxy.activationLogMessage("23"));
+        assertEquals("Java 25 detected; forced jdk.util.jar.version=21.", CommonProxy.activationLogMessage("25"));
+        assertEquals("Java 26 detected; forced jdk.util.jar.version=21.", CommonProxy.activationLogMessage("26"));
+    }
+
+    @Test
     void commonProxyPreInitDoesNotEnforceJarVersionForJava21() {
         System.setProperty("java.specification.version", "21");
         System.clearProperty(JarVersionPropertyEnforcer.PROPERTY_NAME);

@@ -10,10 +10,11 @@ import cpw.mods.fml.common.event.FMLServerStartingEvent;
 public class CommonProxy {
 
     public void preInit(FMLPreInitializationEvent event) {
-        if (!JarVersionPropertyEnforcer.shouldActivate()) {
-            return;
-        }
+        String activationLogMessage = activationLogMessage(System.getProperty("java.specification.version"));
+        if (activationLogMessage == null) return;
+
         JarVersionPropertyEnforcer.enforce();
+        JdkJarVersion21Enforcer.LOG.info(activationLogMessage);
         JdkJarVersion21Enforcer.LOG
             .info(JdkJarVersion21Enforcer.MOD_NAME + " at version " + JdkJarVersion21Enforcer.VERSION);
     }
@@ -39,6 +40,18 @@ public class CommonProxy {
 
     public void serverStarted(FMLServerStartedEvent event) {
         // Server-side initialization
+    }
+
+    static String activationLogMessage(String javaSpecificationVersion) {
+        if (!JavaRuntimeVersion.isAbove21(javaSpecificationVersion)) {
+            return null;
+        }
+        return "Java " + JavaRuntimeVersion.majorVersion(javaSpecificationVersion)
+            + " detected; forced "
+            + JarVersionPropertyEnforcer.PROPERTY_NAME
+            + "="
+            + JarVersionPropertyEnforcer.REQUIRED_VERSION
+            + ".";
     }
 
 }
