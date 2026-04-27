@@ -3,7 +3,7 @@
 一个面向 GTNH / Minecraft 1.7.10 Forge 环境的小型 CoreMod，用于在高版本 Java 运行时下自动设置：
 
 ```text
-jdk.util.jar.version=21
+-Djdk.util.jar.version=21
 ```
 
 ## 这个模组为什么诞生
@@ -12,12 +12,12 @@ jdk.util.jar.version=21
 
 ![诞生原因](docs/assets/QQ_1777283414511.png)
 
-这个模组选择用一个尽量轻量的 CoreMod，在 Forge 加载早期检测 Java 版本，并在需要时强制让 `jdk.util.jar.version` 使用 Java 21 的兼容行为。
+这个模组选择用一个尽量轻量的 CoreMod，在 Forge 加载早期检测 Java 版本，并在需要时通过 `System.setProperty("jdk.util.jar.version", "21")` 设置等价于 `-Djdk.util.jar.version=21` 的 JVM system property。
 
 ## 行为
 
 - Java `21` 及以下：不生效，保持 no-op。
-- Java `22`、`23`、`25`、`26` 以及其他高于 `21` 的版本：设置 `jdk.util.jar.version=21`。
+- Java `22`、`23`、`25`、`26` 以及其他高于 `21` 的版本：设置 `-Djdk.util.jar.version=21`。
 - 生效后会在 `preInit` 输出日志，例如：
 
 ```text
