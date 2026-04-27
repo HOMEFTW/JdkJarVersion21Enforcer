@@ -1,0 +1,164 @@
+import java.util.regex.Matcher
+
+def searchSourceFiles(SourceDirectorySet javaFiles, Map<String, String> en_lang, Map<String, Map<String, String>> langMap) {
+    String state = null
+    Matcher trMatch = null
+
+    javaFiles.each { file ->
+        def content = file.getText("UTF-8")
+        content.eachLine { line ->
+            switch (state) {
+                case 'tr':
+                    def matcher = line =~ /\/\/\s*#([a-z]{2}_[A-Z]{2})?\s+(.+)/
+                    if (matcher) {
+                        def groupCount = matcher.groupCount()
+                        if (groupCount == 1 || groupCount == 2) {
+                            if (groupCount == 1) {
+                                def key = trMatch.group(1) as String
+                                def value = matcher.group(1)
+                                en_lang[key] = value
+                            } else {
+                                def lang = matcher.group(1)
+                                if (lang == null || lang == '') {
+                                    lang = 'en_US'
+                                }
+                                def key = trMatch.group(1) as String
+                                def value = matcher.group(2)
+                                def lang1 = langMap[lang]
+                                if (lang1 == null) {
+                                    lang1 = new HashMap<String, String>()
+                                    langMap[lang] = lang1
+                                }
+                                lang1[key] = value
+                            }
+                        } else {
+                            trMatch = null
+                            state = null
+                        }
+                        break
+                    } else {
+                        trMatch = null
+                        state = null
+                    }
+                default:
+                    def matcher = line =~ /\/\/\s*#tr\s+([a-zA-Z0-9._]+)\s*(.+)?\s*/
+                    if (matcher) {
+                        def groupCount = matcher.groupCount()
+                        if (groupCount == 1) {
+                            state = 'tr'
+                            trMatch = matcher
+                        } else if (groupCount == 2) {
+                            def value = matcher.group(2)
+                            if (value == null) {
+                                state = 'tr'
+                                trMatch = matcher
+                            } else {
+                                def key = matcher.group(1)
+                                en_lang[key] = value
+                            }
+                        }
+                    }
+                    break
+            }
+        }
+    }
+}
+
+def searchLanguageFiles(namespace, sort, langMap) {
+    def resourceFiles = fileTree(dir: "src/main/resources/assets/$namespace/lang").include("*.lang")
+    resourceFiles.each { file ->
+        def fileName = file.name.substring(0, 5)
+        def needSort = false
+        if (fileName == 'en_US') needSort = true
+
+        file.withReader { reader ->
+            def lang1 = langMap[fileName] as Map
+            if (lang1 == null) {
+                lang1 = [:]
+                langMap[fileName] = lang1
+            }
+            reader.eachLine { line ->
+                if (line.startsWith("#") || line.trim().empty) {
+                    if (needSort) sort.add('//' + line)
+                } else {
+                    def parts = line.split('=', 2)
+                    if (parts.size() == 2) {
+                        def key = parts[0].trim()
+                        def value = parts[1]
+                        if (needSort) sort.add(key)
+                        if (!lang1.containsKey(key)) {
+                            lang1[key] = value
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+def writeLanguageFiles(String namespace, Set<String> sort, Map<String, Map<String, String>> langMap, Map<String, String> en_lang) {
+    langMap.each { fileName, innerMap ->
+        def outputFile = new File("src/main/resources/assets/$namespace/lang/${fileName}.lang")
+        outputFile.getParentFile().mkdirs()
+        outputFile.withWriter("UTF-8") { writer ->
+            if (!sort.empty) {
+                sort.each { line ->
+                    if (line.startsWith('//'))
+                        writer.write(line.substring(2) + '\n')
+                    else {
+                        if (innerMap.containsKey(line)) {
+                            writer.write("${line}=${innerMap[line]}\n")
+                        } else if (en_lang.containsKey(line)) {
+                            writer.write("${line}=${en_lang[line]}\n")
+                        }
+                    }
+                }
+            } else {
+                innerMap.each { key, value ->
+                    writer.write("$key=$value\n")
+                }
+            }
+        }
+    }
+}
+
+tasks.register('preprocessLangInJavaFiles') {
+    group = 'preprocessing'
+    description = 'Preprocesses Java files to generate language files from #tr comments.'
+
+    doLast {
+        def namespace = 'jdkjarversion21enforcer'
+
+        def javaFiles = sourceSets.main.java
+        Map<String, Map<String, String>> langMaps = [:]
+        Map<String, String> en_lang = [:]
+        langMaps['en_US'] = en_lang
+        Set<String> allLangKeys = [] as Set
+
+        searchSourceFiles(javaFiles, en_lang, langMaps)
+
+        langMaps.each { name, map ->
+            allLangKeys.addAll(map.keySet())
+        }
+
+        en_lang.keySet().each { String key ->
+            langMaps.each { langName, langMap ->
+                if (!langMap.containsKey(key)) {
+                    getLogger().warn("[Translation Missing] Key '${key}' missing in '${langName}'")
+                }
+            }
+        }
+
+        Set<String> enUsKeys = []
+        searchLanguageFiles(namespace, enUsKeys, langMaps)
+
+        allLangKeys.removeAll(enUsKeys)
+        enUsKeys.addAll(allLangKeys)
+
+        writeLanguageFiles(namespace, enUsKeys, langMaps, en_lang)
+    }
+}
+
+tasks.processResources {
+    dependsOn(tasks.preprocessLangInJavaFiles)
+}

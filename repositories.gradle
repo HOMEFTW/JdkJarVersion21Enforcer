@@ -1,0 +1,8 @@
+// Add any additional repositories for your dependencies here
+
+repositories {
+    maven {
+        name = "Tencent Maven Mirror"
+        url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
+    }
+}

@@ -1,0 +1,27 @@
+/*
+ * Add your dependencies here.
+ * Supported configurations: api, implementation, compileOnly, compileOnlyApi,
+ * runtimeOnlyNonPublishable, devOnlyNonPublishable, runtimeOnly, annotationProcessor,
+ * shadowImplementation, testCONFIG
+ *
+ * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html
+ */
+dependencies {
+    elytraModpackVersion {
+        setGtnhVersion("2.8.4")
+    }
+
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.10.2')
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.10.2')
+}
+
+/**
+ * Generate a dependency notation for GTNH projects.
+ *
+ * @param name       the name of the dependency in the manifest.
+ * @param classifier the classifier
+ * @return the generated notation
+ */
+String gtnh(String name, String classifier = "dev") {
+    return project.elytraModpackVersion.gtnhdev(name)
+}
