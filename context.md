@@ -57,3 +57,4 @@
 - Java 高于 21 时，`CommonProxy.preInit` 会输出类似 `Java 22 detected; forced jdk.util.jar.version=21.` 的日志。
 - `build.gradle` 的开发运行参数也包含 `-Djdk.util.jar.version=21`，方便本地 `runClient` / `runServer` 与实际目标保持一致。
 - 构建产物 `jdkjarversion21enforcer-0.1.0-dev.jar` 的 manifest 包含 `FMLCorePlugin` 和 `FMLCorePluginContainsFMLMod: true`。
+- 最新发布 jar 由 `gradlew.bat build` 生成，路径为 `build/libs/jdkjarversion21enforcer-0.1.0-dev.jar`。
