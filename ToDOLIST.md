@@ -1,15 +1,125 @@
 # TODO 列表
 
 ## 当前计划
+- [ ] **v0.5.12 e2e**：父进程 log 出现 `[relaunch-cp] discovered N extra entries to prepend onto child -cp:` 其中 **N 是个位数**（之前是 156+） + `[main-args] using LaunchArgsCapture (...)` + 子进程不再报 `Found a duplicate mod` + 进主菜单 + 自检 EFFECTIVE。
 - [ ] 推送代码到 `https://github.com/HOMEFTW/JdkJarVersion21Enforcer`。
-- [ ] 创建 `v0.1.0` GitHub Release 并上传新打包 jar。
+- [ ] 创建 `v0.5.12` GitHub Release 并上传新打包 jar；Release Notes 总结 fork 子 JVM 修复链：v0.5.5 (RFB jar) / 0.5.6 (诊断日志) / 0.5.7 (中文路径) / 0.5.8 (含空格 args) / 0.5.9 (-jar 模式) / 0.5.10 (Java 9+ 模块) / 0.5.11 (Tweaker 捕获 args) / 0.5.12 (去掉过度收集策略)。
+- [ ] **GTNH 官方 RFB 整合包 e2e（v0.5.3）**：第一次启动 → log 看到 `[tweaker] Created config/lwjgl3ify-relauncher.json with -D... pre-filled` + 主对话框（标题 "Configure JVM startup arguments"）→ 点 "Apply & Restart Now" → 子进程 `JarFile.runtimeVersion().feature() == 21`。
+- [ ] **兜底弹窗 e2e**：装好 jar 后在主对话框选 "Skip this time" → 兜底弹窗 "Manual configuration reminder" 出现 → 内容包含 PrismLauncher / HMCL / 等说明。
+- [ ] 在装有 Java 22+ JDK 的机器上做端到端验证：`java -javaagent:.../jdkjarversion21enforcer-0.5.3.jar -cp ... Probe` 应输出 `JarFile.runtimeVersion().feature()=21`。
+- [ ] 手工装机（独立启动器）+ lwjgl3ify e2e：第一次启动 → patcher 写 customOptions → 主对话框点 Apply 立即生效 → 第二次启动 lwjgl3ify Relauncher 直接读到 customOptions（不再弹我们的对话框）。
+- [ ] 手工装机（独立启动器）+ 无 lwjgl3ify config e2e：第一次启动 → patcher 创建骨架 → 主对话框点 Apply 立即生效。
+- [ ] 在真实服务端上跑服务端脚本补丁 e2e：放 jar → 第一次启动生成 `<原名>-with-jdk-jar-21.<ext>` → 用并行脚本启动 → 自检通过。
 
 ## 未来想法
-- [ ] 如需真正修改启动器命令行，可另做启动器配置生成器或实例补丁工具。
+- [ ] **JVM args 真实编辑文本框**（类似 lwjgl3ify SettingsDialog）：让用户在主对话框里**编辑** args 列表，不只是看一个固定 `-D`。当前固定值覆盖 100% 诉求，但文本框更灵活。
+- [ ] PrismLauncher / MultiMC `instance.cfg` 自动补丁（彻底零 fork 方案）。
+- [ ] `ManualLauncherInstructionsPopup` 加「复制到剪贴板」按钮，方便用户直接粘贴到启动器配置。
+- [ ] `JvmRelauncher` 增加 `-XX:+IgnoreUnrecognizedVMOptions` 等异常 args 的智能过滤（目前依赖 `shouldKeepInputArg` 黑名单，可以扩展为白名单）。
+- [ ] 检查 lwjgl3ify Tweaker 与本 Tweaker 的处理顺序在 GTNH 默认安装下的实际表现。
 
 ## 已完成
+- [x] 去掉 classpath 过度收集策略，修复子进程 mod 重复加载（v0.5.12）：
+  - **根因**：v0.5.11 修好 main args 后、子进程第一次跑到 mod loading 阶段，量裂出老 bug：每个 mod 被发现 3 次。v0.5.6 加的「策略 C」`harvestUrlClassLoaderChain` 扫描所有 URLClassLoader URLs——`LaunchClassLoader extends URLClassLoader` 里有所有 156 个 mod jar，prepend 到子进程 -cp 后、与 `java.class.path` 里原本就有的 mod jar 路径格式稍有差异 dedupe 不完全，子 JVM FML 扶 mods/ 1 次 + 扫 -cp 中重复的 mod jar 2 次 = 每 mod 3 次。
+  - **修复**：完全删除策略 C（`harvestUrlClassLoaderChain` 方法 + 调用点），只保留策略 A、B——**精确**只返回系统类加载器 FQN 所在的 jar，与 `java.class.path` 不交重。留一段注释说明为什么删。
+  - 98 测试全过；`modVersion` 升至 `0.5.12`；README / context.md / log.md 同步。
+- [x] 从 LaunchWrapper Tweaker 阶段捕获 main args（v0.5.11）：
+  - **根因**：v0.5.10 反射本身通了，但 Windows OS 拒绝查询当前进程的 commandLine——两个 API 都返回 `Optional.empty()`（`NtQueryInformationProcess` 被某种安全策略 / launcher 启动方式拦截）。继续 fallback 到 split → 切碎 args → 子进程跑错 gameDir → fast-fail → 父进程兑底（jar 压制没生效）。
+  - **修复**：在 `JdkJarVersion21Tweaker.acceptOptions(args, gameDir, assetsDir, profile)` 里 LaunchWrapper 会传给我们已解析的 args——这是完全可控的源，不依赖 OS。新增 `LaunchArgsCapture` 保存到 static 字段，`rebuildMainArgs()` 拼接完整 main args。`--tweakClass` 从 `Launch.tweakClassNames` 反射读（fallback FMLTweaker）。
+  - 5 个新增单测；JvmRelauncherTest 加 `@BeforeEach resetCapturedLaunchArgs()` 保证状态隔离。总测试数 93 → **98** 全过。
+  - `modVersion` 升至 `0.5.11`；README / context.md / log.md 同步。
+- [x] Java 9+ 模块访问修复（v0.5.10）：
+  - **根因**：v0.5.9 部署后用户终于提供了 `[main-args]` 诊断日志：两个反射都报 `IllegalAccessException: class JvmRelauncher cannot access a member of class java.lang.ProcessHandleImpl$Info (in module java.base) with modifiers "public"`。`info.getClass()` 返回实现类 `ProcessHandleImpl$Info`（package-private），Java 9+ 模块系统禁止跨模块反射访问实现类。
+  - **修复**：改用公开接口 `Class.forName("java.lang.ProcessHandle$Info")` 查找 method。两处 reflection point 都修。
+  - 93 测试全过；`modVersion` 升至 `0.5.10`。
+- [x] -jar 模式 + commandLine fallback（v0.5.9）：
+  - **根因**：HMCL 用 `-jar <full-path-to-mmc-bootstrap.jar>` 启动 java.exe。sun.java.command 里是 jar basename（`mmc-bootstrap-1.0.jar`）但 ProcessHandle.info().arguments() 里是完整路径，v0.5.8 的 `mainClass.equals(args[i])` 精确匹配在含全路径的 args 数组里找不到 → fallback 到 split → 切碎 `--version "GT New Horizons 2.8.4"`。
+  - **修复**：`locateMainArgsStart` 三个并联策略：(1) `-jar <path>` 模式 → main args 从 -jar+2 开始；(2) main class 精确匹配；(3) main class 是 jar basename 时路径后缀模糊匹配。
+  - 加 `commandLine()` fallback：如果 `arguments()` 返回 Optional.empty()，拿完整命令行字符串后自己 `tokenizeCommandLine`（支持 `"`/`'` 引号、`\\` `\"` 转义）。
+  - 7 个新增单测；locateMainArgsStart 三策略、tokenizeCommandLine 各种转义。总测试数 86 → **93** 全过。
+  - `modVersion` 升至 `0.5.9`；README / context.md / log.md 同步。
+- [x] 含空格的 main args 保留（v0.5.8）：
+  - **根因**：v0.5.7 后子 JVM 起来了但崩在 Angelica NPE。子进程 stdout 显示 `Completely ignored arguments: [New, Horizons, 2.8.4, ...]` + `versions\GT\config\hodgepodgeEarly.properties (找不到)`——`sun.java.command.split(" ")` 简单分词把 `--version "GT New Horizons 2.8.4"` 切成五个 token。
+  - **修复**：反射调 `ProcessHandle.current().info().arguments()`（Java 9+）拿 OS 级原始 argv（保留 token 边界），在 argv 中找 main class 后取完整含空格的 main args。失败时 fallback 但打 WARN。
+  - 86 测试全过。`modVersion` 升至 `0.5.8`。
+- [x] 中文路径下 @argfile 编码问题修复（v0.5.7）：
+  - **根因**：用户安装路径含中文（`F:\Minecraft\1.12.2mod服务器\...`）；之前用 `@argfile` 传 args，argfile 内容用 UTF-8 写但 java.exe（native C 程序）读 argfile 用系统 ANSI codepage（GBK），中文乱码后 classpath 路径错误 → 找不到 RFB jar → ClassNotFoundException。
+  - **修复**：放弃 `@argfile`，直接 `new ProcessBuilder(command)` 传 List。Windows 上 `start()` 用 `CreateProcessW`（Unicode-safe Win32 API），完美支持任何 Unicode 路径。
+  - 加命令行长度监控；**86 测试全过**。
+  - `modVersion` 升至 `0.5.7`；README / context.md / log.md 同步。
+- [x] v0.5.5 修复未生效——加诊断日志 + 多策略 jar 定位（v0.5.6）：
+  - `discoverExtraClasspathEntries` 加策略 B (`ClassLoader.getResource` 解析 jar URL) + 策略 C (URLClassLoader 链扫描)，三策略并联。
+  - 全量 `[relaunch-cp]` INFO/WARN 日志：每个策略成败、最终 prepend 到子 -cp 的 entries 都打到 fml-client-latest.log。
+  - logger 透传：`buildChildCommand(..., logger)` 重载 + `relaunchAndExit` 把 logger 透传下去。
+  - 新增 `parseJarPathFromResourceUrl` + 单测；总数 85 → **86** 全过。
+  - `modVersion` 升至 `0.5.6`；README / context.md / log.md 同步。
+- [x] 修复 GTNH RFB 整合包下 fork 子 JVM 报 RfbSystemClassLoader ClassNotFoundException（v0.5.5）：
+  - 根因：RFB 启动后清理 `System.getProperty("java.class.path")`，把 RFB 自身 jar 移除；我们重建子 classpath 时丢了关键入口；子 JVM phase3 加载 `-Djava.system.class.loader=...RfbSystemClassLoader` 失败 → JVM 启动失败。
+  - 修复：`JvmRelauncher.discoverExtraClasspathEntries()` 反射读 `-Djava.system.class.loader` 指定类的 `CodeSource`，拿到实际 jar 路径 prepend 到子进程 -cp。
+  - `mergeClasspath(extras, existing)` LinkedHashSet 去重 + `File.pathSeparator` join。
+  - 测试：`mergeClasspathPrependsExtrasAndDeduplicates` / `discoverExtraClasspathEntriesIncludesScannedJavaSystemClassLoaderArg` / `discoverExtraClasspathEntriesIsSafeWhenClassMissing`。**85 测试全过**。
+  - `modVersion` 升至 `0.5.5`；README / context.md / log.md 同步。
+- [x] fork 失败诊断 + fast-fail 回退（v0.5.4）：
+  - `JvmRelauncher.relaunchAndExit` 签名重构：增加 `gameDir` + `logger` 参数，返回 `OptionalInt`（fast-fail 时返回 exitCode 让调用方保留父进程）。
+  - fork 前打印完整命令行；fork 后子进程 stdout/stderr 重定向到 `<gameDir>/logs/jdkjarversion21enforcer-relaunch-{out,err}.log`。
+  - fast-fail：子进程 5 秒内非零退出 → 不退出父进程 → LaunchWrapper 继续启动游戏（避免启动器看到"崩溃"）+ 弹兜底提示弹窗。
+  - `Runtime.halt` → `System.exit`：让 shutdown hooks 跑完。
+  - Java 8 source level 兼容修复：`Path.of` → `Paths.get`，`Process#pid()` 用反射调。
+  - **82 个测试全部通过**。`modVersion` 升至 `0.5.4`；README / context.md / log.md 同步。
+- [x] GUI 主对话框文案重写 + 自动创建 lwjgl3ify config 骨架 + 兜底提示弹窗拆分（v0.5.3）：
+  - `Lwjgl3ifyConfigPatcher` 新增 `Result.CREATED` + `patchOrCreate(...)`：lwjgl3ify-relauncher.json 不存在时主动创建骨架 `{"customOptions":["-Djdk.util.jar.version=21"]}`。
+  - `RelaunchPromptDialog` 重写：标题 "Configure JVM startup arguments"，按钮 "Apply & Restart Now (recommended)"，文案"我帮你做了 / 会做，请确认"，新增 `PatcherStatus` 让上半部分按 patcher 实际发生定制。
+  - 新增 `ManualLauncherInstructionsPopup`：非阻塞 INFO 弹窗，仅在【未设置成功】路径上调用，告诉用户怎么手动加 `-D` / `-javaagent:` 到各种启动器。
+  - `RelaunchService.runClientFlow` 流程改造：patcher 不再提前 return，把结果转成 PatcherStatus 后**总是**走对话框分支；Skip / SUPPRESS_FOREVER / DIALOG_DISABLED / DIALOG_SUPPRESSED / fork 意外返回 时调用兜底弹窗。
+  - 测试：6 个新增/调整，总数 76 → **82** 全部通过。
+  - `modVersion` 升至 `0.5.3`；README / context.md / log.md 同步。
+- [x] 反转 v0.5.1 RFB 静默策略——GTNH 官方整合包实测不传 -D，必须介入（v0.5.2）：
+  - 删除 `Outcome.SKIPPED_RFB_BOOTED` 枚举值和 `runClientFlow` 里的 RFB 短路。RFB 模式只打一行 INFO 注解，照常走 patcher / 对话框流程。
+  - 保留 `RelaunchService.isRfbBooted()` 工具方法仅作 INFO 日志使用。
+  - 测试调整：`rfbBootedShortCircuits` → `rfbBootedDoesNotShortCircuitInV052`，断言 RFB 启动时 outcome 不再是 SKIPPED 而是 DIALOG_HEADLESS（流程跑到对话框分支）。`propertyAlreadyOnCommandLineShortCircuits` 保留不变。
+  - **76 个测试全部通过**。`modVersion` 升至 `0.5.2`。
+  - 文档全面纠正：v0.5.1 关于"GTNH 官方包用 RFB 所以会自动接管 -D"的认知是错的——RFB 接管的只是 lwjgl3ify GUI fork，跟 jar 多版本压制无关。
+- [x] 修正 v0.5.0 在 GTNH 官方 RFB 整合包里的烦人弹窗（v0.5.1）：
+  - `RelaunchService` 加两个早期短路：`SKIPPED_PROPERTY_ALREADY_SET`（`-Djdk.util.jar.version=21` 已在命令行）+ `SKIPPED_RFB_BOOTED`（`Launch.blackboard["lwjgl3ify:rfb-booted"] == TRUE`，与 lwjgl3ify Tweaker 同一契约）。
+  - `RelaunchService.isRfbBooted()` 用反射避免硬依赖 LaunchWrapper。
+  - 新增 2 个单元测试，与已有合计 **76 个测试全部通过**。
+  - 文档纠正"未装 lwjgl3ify" 的误解：GTNH 官方 Java 17–25 整合包用 RFB 启动，lwjgl3ify 是装了但是无感运行的。"用户看不到 lwjgl3ify GUI" ≠ "用户没装 lwjgl3ify"。
+  - `modVersion` 升至 `0.5.1`；README / context.md / log.md 同步。
+- [x] LaunchWrapper Tweaker 入口 `JdkJarVersion21Tweaker`（v0.5.0）：
+  - jar manifest 加 `TweakClass: ...`，FML CoreModManager 在扫 `mods/*.jar` 时自动注册为 LaunchWrapper Tweaker，inject 阶段早于 Forge mod 加载（与 lwjgl3ify Tweaker 同期）。
+  - `injectIntoClassLoader` 调 `RelaunchService.runClientFlow(..., Phase.TWEAKER, ...)`，干完调 `markHandled()`。
+  - `Throwable` 全部吞掉、严禁调 `JarFile.runtimeVersion()`、服务端 `FMLLaunchHandler.side().isServer()` 时 no-op。
+  - 抽象出 `RelaunchService` 公共服务（10 种 `Outcome`），Tweaker 与 `preInit` 共享一份代码。
+  - `CommonProxy.preInit` 检测 `jdkjarversion21enforcer.client.handled` 互锁，不重复弹窗 / 写文件。
+  - 单元测试 `RelaunchServiceTest`（8）+ `JdkJarVersion21TweakerTest`（5），与已有合计 **74 个测试全部通过**。
+  - manifest 现在包含：`FMLCorePlugin` + `FMLCorePluginContainsFMLMod: true` + `Premain-Class` + `Agent-Class` + `TweakClass` —— **同一份 jar 同时是 mod / CoreMod / Java Agent / LaunchWrapper Tweaker**。
+  - `modVersion` 升至 `0.5.0`；README / context.md / log.md 同步。
+- [x] 客户端没装 lwjgl3ify 时的预启动 GUI + JVM 自重启（v0.4.0）：
+  - `RelaunchPromptDialog` 模态 Swing 对话框，三选项（Restart Now / Skip this time / Don't ask again），headless 自动 `SKIP_ONCE`，所有 AWT 异常被吞。
+  - `JvmRelauncher` 重建当前 JVM 命令行、追加 `-D...=21` + relaunch guard、用 `@argfile` 规避 Windows 8KB 命令行限制、`ProcessBuilder.inheritIO()` 接管 IO、父进程 `Runtime.halt(child.exit)`。
+  - `isRelaunchedChild()` 检查放在最前，避免 fork 出来的子进程仍然未生效时无限重启。
+  - `Config` 加 `prelaunch_relaunch_prompt`（默认 true）+ `prelaunch_relaunch_suppressed`（默认 false，"Don't ask again" 时被自动写为 true）。
+  - 单元测试 `JvmRelauncherTest` + `RelaunchPromptDialogTest` + `ConfigTest` 新断言，与已有合计 **61 个测试全部通过**。
+  - README、context.md、log.md 同步；`modVersion` 升至 `0.4.0`。
+- [x] `RestartPopup`：补丁实际写入后（lwjgl3ify config 修改 / 并行启动脚本生成）异步弹 Swing 「请重启」对话框；通过 `GraphicsEnvironment.isHeadless()` 自动跳过服务端 / CI / 容器；任何 AWT 异常都被吞，绝不影响主流程。带配置开关 `show_restart_popup_after_patch=true`。
+- [x] 单元测试 `RestartPopupTest`（3）+ `ConfigTest` 加新开关断言。`build.gradle` 给 test JVM 加 `systemProperty 'java.awt.headless', 'true'` 让测试行为确定。
+- [x] 文档 + 「触发条件汇总」表格说明 Java 版本 gate 和 patcher / 弹窗的关系：Java ≤ 21 全部跳过，Java 22+ 且未生效才跑。
+- [x] 客户端 `Lwjgl3ifyConfigPatcher`：在 `preInit` 自动往 `config/lwjgl3ify-relauncher.json` 的 `customOptions` 追加 `-Djdk.util.jar.version=21`，禁用 HTML escaping 保持人类可读。带配置开关 `auto_patch_lwjgl3ify_config=true`。
+- [x] 服务端 `ServerStartScriptPatcher`：扫已知启动脚本，**仅生成并行 `<name>-with-jdk-jar-21.<ext>` 文件**，绝不修改用户原脚本。带配置开关 `auto_patch_server_start_scripts=true`。
+- [x] `Config` 类读写 `config/jdkjarversion21enforcer.cfg`（properties 格式 + 注释），支持 true/false/1/0/yes/no/on/off。
+- [x] `CommonProxy.preInit` 检测属性已生效时直接 INFO 返回，不再调用 patchers；未生效或未知时分流到客户端/服务端 patcher。
+- [x] 为三个新类补充 17 个单元测试（`@TempDir`、Gson 集成、CRLF/LF 行尾保留、注释行跳过、引号路径处理），与已有 25 个合计 45 个测试全部通过。
+- [x] dependencies.gradle 显式 `testImplementation 'com.google.code.gson:gson:2.2.4'` 与 Mojang 自带运行时 Gson 同版本。
+- [x] 升级 `modVersion` 到 `0.3.0`，README 增补 lwjgl3ify 自动补丁与服务端脚本并行生成两节。
+- [x] 把 jar 改造为 mod + Java Agent 双重身份：manifest 加入 `Premain-Class` / `Agent-Class` / `Can-Redefine-Classes` / `Can-Retransform-Classes`。
+- [x] `JarVersionAgent` 提供 `premain` / `agentmain` 全部 4 个签名重载。
+- [x] `JarVersionPropertyEnforcer.detectEffectiveJarRuntimeFeatureVersion()` 反射读 `JarFile.runtimeVersion().feature()` 自检。
+- [x] `CommonProxy.preInit` 自检后未生效则 WARN 并给出加 `-javaagent:` / `-D` 的指引。
+- [x] 单元测试覆盖 4 个 agent 入口、自检方法和 verification 消息分类（共 25 个测试，全部通过）。
+- [x] README 全面重写：解释 `JarFile` 静态字段时序问题、推荐 Java Agent 用法、各类启动器示例、自检日志含义。
+- [x] 升级 `modVersion` 到 `0.2.0`。
 - [x] 准备 `v0.1.0` 版本号、README 和 README 图片资产。
-- [x] 按请求打包生成最新 `jdkjarversion21enforcer-0.1.0.jar`。
+- [x] 按请求打包生成最新 jar 产物（`build/libs/jdkjarversion21enforcer-0.2.0.jar`）。
 - [x] Java 高于 21 触发属性强制时，在 `preInit` 后续输出生效日志。
 - [x] 添加 Java 版本检测：Java `22/23/25/26` 启用属性强制，Java `21` 及以下保持 no-op。
 - [x] 创建一个 GTNH CoreMod，在 Forge 加载早期强制设置 `-Djdk.util.jar.version=21` 对应的系统属性。

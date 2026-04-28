@@ -2,6 +2,9 @@ package com.andgatech.jdkjarversion21enforcer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.OptionalInt;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,5 +86,39 @@ class CorePluginAndProxyEnforcementTest {
         assertEquals(
             JarVersionPropertyEnforcer.REQUIRED_VERSION,
             System.getProperty(JarVersionPropertyEnforcer.PROPERTY_NAME));
+    }
+
+    @Test
+    void classifyVerificationMapsAbsentToUnknown() {
+        assertEquals(CommonProxy.VerificationOutcome.UNKNOWN, CommonProxy.classifyVerification(OptionalInt.empty()));
+    }
+
+    @Test
+    void classifyVerificationMapsRequiredFeatureToEffective() {
+        assertEquals(
+            CommonProxy.VerificationOutcome.EFFECTIVE,
+            CommonProxy.classifyVerification(OptionalInt.of(JarVersionPropertyEnforcer.REQUIRED_FEATURE_VERSION)));
+    }
+
+    @Test
+    void classifyVerificationMapsOtherFeaturesToIneffective() {
+        assertEquals(CommonProxy.VerificationOutcome.INEFFECTIVE, CommonProxy.classifyVerification(OptionalInt.of(8)));
+        assertEquals(CommonProxy.VerificationOutcome.INEFFECTIVE, CommonProxy.classifyVerification(OptionalInt.of(22)));
+        assertEquals(CommonProxy.VerificationOutcome.INEFFECTIVE, CommonProxy.classifyVerification(OptionalInt.of(25)));
+    }
+
+    @Test
+    void verificationInfoMessageReportsTheObservedFeatureVersion() {
+        String message = CommonProxy.verificationInfoMessage(21);
+        assertTrue(message.contains("= 21"), message);
+        assertTrue(message.contains("effective"), message);
+    }
+
+    @Test
+    void verificationWarnMessageGuidesUserToAddJavaagent() {
+        String message = CommonProxy.verificationWarnMessage(22);
+        assertTrue(message.contains("is 22"), message);
+        assertTrue(message.contains("-javaagent:"), message);
+        assertTrue(message.contains(JarVersionPropertyEnforcer.PROPERTY_NAME), message);
     }
 }

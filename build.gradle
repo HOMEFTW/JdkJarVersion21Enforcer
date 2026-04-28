@@ -13,4 +13,30 @@ minecraft {
 
 test {
     useJUnitPlatform()
+    // Force headless so RestartPopup tests behave deterministically and so any accidental Swing
+    // initialisation in main code doesn't open windows during CI.
+    systemProperty 'java.awt.headless', 'true'
+}
+
+// Make this jar usable as a Java Agent via `-javaagent:<jar>`. premain runs before any user
+// class touches java.util.jar.JarFile, so System.setProperty("jdk.util.jar.version", "21") issued
+// from the agent is guaranteed to influence JarFile.RUNTIME_VERSION. Loading the same jar as a
+// regular Forge mod (without -javaagent) does NOT have this guarantee because by the time FML
+// invokes the CoreMod, JarFile has already been initialized while scanning the mods folder.
+tasks.named('jar').configure {
+    manifest {
+        attributes(
+            'Premain-Class':            'com.andgatech.jdkjarversion21enforcer.agent.JarVersionAgent',
+            'Agent-Class':              'com.andgatech.jdkjarversion21enforcer.agent.JarVersionAgent',
+            'Can-Redefine-Classes':     'false',
+            'Can-Retransform-Classes':  'false',
+            // LaunchWrapper Tweaker entry point. FML's CoreModManager picks this up while scanning
+            // mods/*.jar and registers our class with LaunchWrapper, which then calls
+            // injectIntoClassLoader BEFORE Forge starts loading mods. This is exactly how
+            // lwjgl3ify gets to run code so early without being installed in versions/. With this
+            // tweaker active, the modal relaunch dialog / lwjgl3ify-config patcher fire at the
+            // earliest possible time a mod in mods/ can react.
+            'TweakClass':               'com.andgatech.jdkjarversion21enforcer.tweaker.JdkJarVersion21Tweaker'
+        )
+    }
 }

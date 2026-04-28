@@ -13,6 +13,10 @@ dependencies {
 
     testImplementation('org.junit.jupiter:junit-jupiter-api:5.10.2')
     testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.10.2')
+
+    // Gson for tests; main classpath uses the Gson 2.2.4 that ships with vanilla Minecraft 1.7.10.
+    // Pin the test-only Gson to the same major.minor to keep API behavior consistent.
+    testImplementation('com.google.code.gson:gson:2.2.4')
 }
 
 /**

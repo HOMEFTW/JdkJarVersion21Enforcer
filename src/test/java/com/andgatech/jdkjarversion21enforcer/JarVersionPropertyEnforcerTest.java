@@ -2,6 +2,9 @@ package com.andgatech.jdkjarversion21enforcer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.OptionalInt;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -76,5 +79,17 @@ class JarVersionPropertyEnforcerTest {
         JarVersionPropertyEnforcer.enforceIfRuntimeAbove21("22");
 
         assertEquals("21", System.getProperty(PROPERTY_NAME));
+    }
+
+    @Test
+    void detectorReturnsAReasonableFeatureVersionOnJava9Plus() {
+        // Tests run on the build JDK (Zulu 21 per gradle.properties), so JarFile.runtimeVersion()
+        // must be available and return a feature version >= 9.
+        OptionalInt detected = JarVersionPropertyEnforcer.detectEffectiveJarRuntimeFeatureVersion();
+        int specMajor = JavaRuntimeVersion.majorVersion(System.getProperty("java.specification.version"));
+        if (specMajor >= 9) {
+            assertTrue(detected.isPresent(), "Expected JarFile.runtimeVersion() to be reachable on Java " + specMajor);
+            assertTrue(detected.getAsInt() >= 9, "Feature version was " + detected.getAsInt());
+        }
     }
 }
